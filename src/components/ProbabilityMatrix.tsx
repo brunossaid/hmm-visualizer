@@ -8,9 +8,11 @@ import {
   TableRow,
   TextField,
   Typography,
+  Button,
 } from '@mui/material';
 
 type ProbabilityMatrixProps = {
+  description?: string;
   rowNames: string[];
   columnNames: string[];
   matrix: number[][];
@@ -18,6 +20,7 @@ type ProbabilityMatrixProps = {
 };
 
 export default function ProbabilityMatrix({
+  description,
   rowNames,
   columnNames,
   matrix,
@@ -30,16 +33,66 @@ export default function ProbabilityMatrix({
   ) => {
     const updatedMatrix = matrix.map((row) => [...row]);
 
-    updatedMatrix[rowIndex][columnIndex] = newValue;
+    const roundedValue = Number(newValue.toFixed(2));
+
+    updatedMatrix[rowIndex][columnIndex] = roundedValue;
 
     onChange(updatedMatrix);
   };
 
+  const distributeEqually = () => {
+    const totalUnits = 100;
+    const baseUnits = Math.floor(totalUnits / columnNames.length);
+    const remainder = totalUnits % columnNames.length;
+
+    const row = Array.from({ length: columnNames.length }, (_, index) => {
+      const units = baseUnits + (index < remainder ? 1 : 0);
+
+      return units / 100;
+    });
+
+    const newMatrix = Array.from({ length: rowNames.length }, () => [...row]);
+
+    onChange(newMatrix);
+  };
+
+  const rowSums = matrix.map((row) =>
+    row.reduce((total, probability) => total + probability, 0)
+  );
+
+  const allRowsValid = rowSums.every((rowSum) => Math.abs(rowSum - 1) < 0.001);
+
   return (
     <Box sx={{ mb: 4 }}>
+      <Typography
+        variant="subtitle1"
+        sx={{
+          color: 'gray',
+          mt: 1,
+          mb: 1,
+        }}
+      >
+        {description}
+      </Typography>
+      <Typography
+        variant="body1"
+        sx={{
+          mb: 2,
+          color: allRowsValid ? 'success.main' : 'warning.main',
+        }}
+      >
+        {allRowsValid
+          ? 'Todas las filas suman 1.00 correctamente.'
+          : 'Cada fila debe sumar exactamente 1.00.'}
+      </Typography>
+
       <TableContainer
         sx={{
-          overflowX: 'auto',
+          mt: 2,
+          border: '1px solid',
+          borderColor: 'grey.800',
+          borderRadius: 2,
+          overflow: 'hidden',
         }}
       >
         <Table
@@ -110,12 +163,9 @@ export default function ProbabilityMatrix({
                         value={matrix[rowIndex]?.[columnIndex] ?? 0}
                         onChange={(event) => {
                           const value = Number(event.target.value);
+                          const limitedValue = Math.min(Math.max(value, 0), 1);
 
-                          handleCellChange(
-                            rowIndex,
-                            columnIndex,
-                            Math.min(Math.max(value, 0), 1)
-                          );
+                          handleCellChange(rowIndex, columnIndex, limitedValue);
                         }}
                         slotProps={{
                           htmlInput: {
@@ -165,6 +215,18 @@ export default function ProbabilityMatrix({
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Button
+        variant="outlined"
+        onClick={distributeEqually}
+        sx={{
+          display: 'block',
+          mx: 'auto',
+          mt: 2,
+        }}
+      >
+        Distribuir por igual
+      </Button>
     </Box>
   );
 }

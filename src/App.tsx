@@ -1,20 +1,17 @@
-import {
-  Box,
-  Button,
-  Typography,
-  TextField,
-  Divider,
-  Chip,
-  List,
-  ListItem,
-  ListItemIcon,
-  Slider,
-} from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { useState } from 'react';
-import TripOriginIcon from '@mui/icons-material/TripOrigin';
-import Grid from '@mui/material/Grid';
 import ProbabilityMatrix from './components/ProbabilityMatrix';
 import backgroundPattern from './styles/background';
+import SectionDivider from './components/SectionDivider';
+import StateConfiguration from './components/StateConfiguration';
+import ObservationConfiguration from './components/ObservationConfiguration';
+import InitialProbabilities from './components/InitialProbabilities';
+import ObservationSequence, {
+  type ObservationSequenceItem,
+} from './components/ObservationSequence';
+import { calculateForward } from './algorithms/forward';
+import { calculateViterbi } from './algorithms/viterbi';
+import Results from './components/Results';
 
 export default function App() {
   const distributeEqually = (count: number) => {
@@ -44,6 +41,18 @@ export default function App() {
     });
 
     setInitialProbabilities(distributeEqually(newNumStates));
+
+    setTransitionMatrix(createEqualMatrix(newNumStates, newNumStates));
+    setEmissionMatrix(createEqualMatrix(newNumStates, numObservations));
+  };
+
+  const handleStateNameChange = (index: number, newName: string) => {
+    setStateNames((currentNames) => {
+      const updatedNames = [...currentNames];
+      updatedNames[index] = newName;
+
+      return updatedNames;
+    });
   };
 
   const [numObservations, setNumObservations] = useState(2);
@@ -59,10 +68,21 @@ export default function App() {
       const updatedNames = [...currentNames];
 
       while (updatedNames.length < newNumObservations) {
-        updatedNames.push(`Observacion ${updatedNames.length + 1}`);
+        updatedNames.push(`Observación ${updatedNames.length + 1}`);
       }
 
       return updatedNames.slice(0, newNumObservations);
+    });
+
+    setEmissionMatrix(createEqualMatrix(numStates, newNumObservations));
+  };
+
+  const handleObservationNameChange = (index: number, newName: string) => {
+    setObservationNames((currentNames) => {
+      const updatedNames = [...currentNames];
+      updatedNames[index] = newName;
+
+      return updatedNames;
     });
   };
 
@@ -71,20 +91,93 @@ export default function App() {
     0
   );
 
-  const [transitionMatrix, setTransitionMatrix] = useState([
-    [0.5, 0.5],
-    [0.5, 0.5],
-  ]);
+  const handleInitialProbabilityChange = (index: number, newValue: number) => {
+    const otherTotal = initialProbabilities.reduce(
+      (total, probability, currentIndex) =>
+        currentIndex === index ? total : total + probability,
+      0
+    );
 
-  const [emissionMatrix, setEmissionMatrix] = useState([
-    [0.5, 0.5],
-    [0.5, 0.5],
-  ]);
+    const maxAllowed = 100 - otherTotal;
+    const limitedValue = Math.min(newValue, maxAllowed);
+
+    setInitialProbabilities((currentProbabilities) => {
+      const updatedProbabilities = [...currentProbabilities];
+      updatedProbabilities[index] = limitedValue;
+
+      return updatedProbabilities;
+    });
+  };
+
+  const handleDistributeInitialProbabilities = () => {
+    setInitialProbabilities(distributeEqually(numStates));
+  };
+
+  const createEqualMatrix = (rows: number, columns: number) => {
+    const totalUnits = 100;
+    const baseUnits = Math.floor(totalUnits / columns);
+    const remainder = totalUnits % columns;
+
+    const row = Array.from({ length: columns }, (_, index) => {
+      const units = baseUnits + (index < remainder ? 1 : 0);
+
+      return units / 100;
+    });
+
+    return Array.from({ length: rows }, () => [...row]);
+  };
+
+  const [transitionMatrix, setTransitionMatrix] = useState(() =>
+    createEqualMatrix(2, 2)
+  );
+
+  const [emissionMatrix, setEmissionMatrix] = useState(() =>
+    createEqualMatrix(2, 2)
+  );
+
+  const [observationSequence, setObservationSequence] = useState<
+    ObservationSequenceItem[]
+  >([]);
+
+  const [showResults, setShowResults] = useState(false);
+
+  const [forwardResult, setForwardResult] = useState<ReturnType<
+    typeof calculateForward
+  > | null>(null);
+
+  const [viterbiResult, setViterbiResult] = useState<ReturnType<
+    typeof calculateViterbi
+  > | null>(null);
+
+  const observationSequenceNames = observationSequence.map(
+    (item) => observationNames[item.observationIndex]
+  );
 
   const handleCalculate = () => {
-    console.log('stateNames', stateNames);
-    console.log('observationNames', observationNames);
-    console.log('initialProbabilities', initialProbabilities);
+    const normalizedInitialProbabilities = initialProbabilities.map(
+      (value) => value / 100
+    );
+
+    const data = {
+      stateNames,
+      observationNames,
+      initialProbabilities: normalizedInitialProbabilities,
+      transitionMatrix,
+      emissionMatrix,
+      observationSequenceNames,
+    };
+
+    const calculatedForwardResult = calculateForward(data);
+    const calculatedViterbiResult = calculateViterbi(data);
+
+    setForwardResult(calculatedForwardResult);
+    setViterbiResult(calculatedViterbiResult);
+
+    console.log('forward:', calculatedForwardResult);
+    console.log('viterbi:', calculatedViterbiResult);
+    console.log('data:', data);
+
+    setShowResults(true);
   };
 
   return (
@@ -104,6 +197,7 @@ export default function App() {
         sx={{
           width: '100%',
           maxWidth: 1300,
+          minHeight: '100vh',
 
           px: {
             xs: 2,
@@ -143,6 +237,7 @@ export default function App() {
           sx={{
             color: 'gray',
             textAlign: 'center',
+            fontStyle: 'italic',
             fontSize: {
               xs: '1.2rem',
               sm: '1.5rem',
@@ -150,374 +245,103 @@ export default function App() {
             },
           }}
         >
-          Simulador
+          Forward & Viterbi
         </Typography>
 
-        <Box
-          sx={{
-            width: '100%',
-            maxWidth: 1200,
-            mx: 'auto',
-            mt: 2,
-            px: {
-              xs: 2,
-              sm: 3,
-              md: 4,
-            },
-          }}
-        >
-          {/* ESTADOS */}
-          <Divider
-            sx={{
-              width: '100%',
-              '&::before, &::after': {
-                borderColor: 'white',
-              },
-            }}
-          >
-            <Chip label="Estados" size="medium" color="primary" />
-          </Divider>
-
-          <Box sx={{ mb: 4 }}>
-            <Typography
-              variant="subtitle1"
-              sx={{ color: 'gray', mt: 1, mb: 2 }}
-            >
-              Defina la cantidad de estados ocultos del modelo y el nombre de
-              cada uno.
-            </Typography>
-
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              {[2, 3, 4, 5].map((n) => (
-                <Button
-                  key={n}
-                  variant={numStates === n ? 'contained' : 'outlined'}
-                  color="primary"
-                  onClick={() => handleNumStatesChange(n)}
-                  sx={{
-                    px: {
-                      xs: 3,
-                      sm: 5,
-                    },
-                  }}
-                >
-                  {n}
-                </Button>
-              ))}
-            </Box>
-
+        {showResults ? (
+          <Results
+            forwardResult={forwardResult}
+            viterbiResult={viterbiResult}
+            stateNames={stateNames}
+            observationNames={observationNames}
+            sequence={observationSequenceNames}
+          />
+        ) : (
+          <>
             <Box
               sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 1,
-                mt: 3,
-              }}
-            >
-              <Grid container spacing={1} sx={{ mt: 3 }}>
-                {stateNames.map((name, index) => (
-                  <Grid
-                    key={index}
-                    size={{
-                      xs: 12,
-                      sm: stateNames.length === 2 ? 6 : 6,
-                      md: stateNames.length <= 3 ? 12 / stateNames.length : 4,
-                      lg: stateNames.length <= 4 ? 12 / stateNames.length : 3,
-                    }}
-                  >
-                    <TextField
-                      label={`Estado ${index + 1}`}
-                      value={name}
-                      onChange={(e) => {
-                        const newNames = [...stateNames];
-                        newNames[index] = e.target.value;
-                        setStateNames(newNames);
-                      }}
-                      fullWidth
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-          </Box>
-
-          {/* OBSERVACIONES */}
-          <Divider
-            sx={{
-              width: '100%',
-              '&::before, &::after': {
-                borderColor: 'white',
-              },
-            }}
-          >
-            <Chip label="Observaciones" size="medium" color="primary" />
-          </Divider>
-
-          <Box sx={{ mb: 4 }}>
-            <Typography
-              variant="subtitle1"
-              sx={{ color: 'gray', mt: 1, mb: 2 }}
-            >
-              Defina la cantidad de simbolos del alfabeto de observacion y el
-              nombre de cada uno.
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              {[2, 3, 4, 5, 6].map((n) => (
-                <Button
-                  key={n}
-                  variant={numObservations === n ? 'contained' : 'outlined'}
-                  color="primary"
-                  onClick={() => handleNumObservationsChange(n)}
-                  sx={{
-                    px: {
-                      xs: 3,
-                      sm: 5,
-                    },
-                  }}
-                >
-                  {n}
-                </Button>
-              ))}
-            </Box>
-
-            <Box
-              sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 1,
-                mt: 3,
-              }}
-            >
-              <Grid container spacing={1} sx={{ mt: 3 }}>
-                {observationNames.map((name, index) => (
-                  <Grid
-                    key={index}
-                    size={{
-                      xs: 12,
-                      sm: observationNames.length === 2 ? 6 : 6,
-                      md:
-                        observationNames.length <= 3
-                          ? 12 / observationNames.length
-                          : 4,
-                      lg:
-                        observationNames.length <= 4
-                          ? 12 / observationNames.length
-                          : 3,
-                    }}
-                  >
-                    <TextField
-                      key={index}
-                      label={`Observación ${index + 1}`}
-                      value={name}
-                      onChange={(e) => {
-                        const newNames = [...observationNames];
-                        newNames[index] = e.target.value;
-                        setObservationNames(newNames);
-                      }}
-                      fullWidth
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-          </Box>
-
-          {/* PROBABILIDADES INICIALES */}
-          <Divider
-            sx={{
-              width: '100%',
-              '&::before, &::after': {
-                borderColor: 'white',
-              },
-            }}
-          >
-            <Chip
-              label="Probabilidades iniciales"
-              size="medium"
-              color="primary"
-            />
-          </Divider>
-
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" sx={{ color: 'gray', mt: 1 }}>
-              Defina la probabilidad de que el modelo comience en cada estado.
-              La suma total debe ser 100%
-            </Typography>
-            <Typography
-              variant="body1"
-              sx={{
-                mt: 1,
-                color:
-                  totalInitialProbability === 100
-                    ? 'success.main'
-                    : 'warning.main',
-              }}
-            >
-              {totalInitialProbability === 100
-                ? 'Suma total: 100%. Para aumentar una probabilidad, primero reduzca otra.'
-                : `Suma total: ${totalInitialProbability}%. Restan ${
-                    100 - totalInitialProbability
-                  }% por asignar.`}
-            </Typography>
-            <List>
-              {stateNames.map((name, index) => {
-                const total = initialProbabilities.reduce(
-                  (sum, probability) => sum + probability,
-                  0
-                );
-
-                const currentValue = initialProbabilities[index];
-                const available = 100 - total;
-                const maxValue = currentValue + available;
-
-                return (
-                  <ListItem
-                    key={index}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        width: 180,
-                        display: 'flex',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <ListItemIcon sx={{ minWidth: 35 }}>
-                        <TripOriginIcon color="primary" />
-                      </ListItemIcon>
-
-                      <Typography>{name}</Typography>
-                    </Box>
-
-                    <Box
-                      sx={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 2,
-                      }}
-                    >
-                      <Slider
-                        value={initialProbabilities[index]}
-                        min={0}
-                        max={100}
-                        step={1}
-                        valueLabelDisplay="auto"
-                        onChange={(_, newValue) => {
-                          if (typeof newValue !== 'number') return;
-
-                          const otherTotal = initialProbabilities.reduce(
-                            (total, probability, currentIndex) =>
-                              currentIndex === index
-                                ? total
-                                : total + probability,
-                            0
-                          );
-
-                          const maxAllowed = 100 - otherTotal;
-                          const limitedValue = Math.min(newValue, maxAllowed);
-
-                          setInitialProbabilities((currentProbabilities) => {
-                            const updatedProbabilities = [
-                              ...currentProbabilities,
-                            ];
-                            updatedProbabilities[index] = limitedValue;
-                            return updatedProbabilities;
-                          });
-                        }}
-                      />
-
-                      <Typography sx={{ width: 45 }}>
-                        {currentValue}%
-                      </Typography>
-                    </Box>
-                  </ListItem>
-                );
-              })}
-            </List>
-            <Button
-              variant="outlined"
-              onClick={() =>
-                setInitialProbabilities(distributeEqually(numStates))
-              }
-              sx={{
-                display: 'block',
+                width: '100%',
+                maxWidth: 1200,
                 mx: 'auto',
                 mt: 2,
+                px: {
+                  xs: 2,
+                  sm: 3,
+                  md: 4,
+                },
               }}
             >
-              Distribuir por igual
-            </Button>
-          </Box>
-        </Box>
-        <Box
-          sx={{
-            width: '100%',
-            maxWidth: 1200,
-            mx: 'auto',
-            mt: 2,
-            px: {
-              xs: 2,
-              sm: 3,
-              md: 4,
-            },
-          }}
-        >
-          {/* MATRIZ DE TRANSICIÓN */}
-          <Divider
-            sx={{
-              width: '100%',
-              '&::before, &::after': {
-                borderColor: 'white',
-              },
-            }}
-          >
-            <Chip label="Matriz de Transición" size="medium" color="primary" />
-          </Divider>
+              {/* ESTADOS */}
+              <SectionDivider label="Estados" />
 
-          <Typography variant="subtitle1" sx={{ color: 'gray', mt: 1, mb: 2 }}>
-            Defina las probabilidades de transición entre los estados ocultos.
-            La suma de las probabilidades de cada fila debe ser igual a 1.00.
-          </Typography>
-          <ProbabilityMatrix
-            rowNames={stateNames}
-            columnNames={stateNames}
-            matrix={transitionMatrix}
-            onChange={setTransitionMatrix}
-          />
+              <StateConfiguration
+                numStates={numStates}
+                stateNames={stateNames}
+                onNumStatesChange={handleNumStatesChange}
+                onStateNameChange={handleStateNameChange}
+              />
 
-          {/* MATRIZ DE EMISION */}
-          <Divider
-            sx={{
-              width: '100%',
-              '&::before, &::after': {
-                borderColor: 'white',
-              },
-            }}
-          >
-            <Chip label="Matriz de Emisión" size="medium" color="primary" />
-          </Divider>
+              {/* OBSERVACIONES */}
+              <SectionDivider label="Observaciones" />
 
-          <Typography variant="subtitle1" sx={{ color: 'gray', mt: 1, mb: 2 }}>
-            Defina las probabilidades de emisión de cada símbolo de observación
-            para cada estado. La suma de las probabilidades de cada fila debe
-            ser igual a 1.00.
-          </Typography>
-        </Box>
+              <ObservationConfiguration
+                numObservations={numObservations}
+                observationNames={observationNames}
+                onNumObservationsChange={handleNumObservationsChange}
+                onObservationNameChange={handleObservationNameChange}
+              />
 
-        {/* CALCULAR */}
+              {/* PROBABILIDADES INICIALES */}
+              <SectionDivider label="Probabilidades Iniciales" />
+
+              <InitialProbabilities
+                stateNames={stateNames}
+                initialProbabilities={initialProbabilities}
+                totalInitialProbability={totalInitialProbability}
+                onProbabilityChange={handleInitialProbabilityChange}
+                onDistributeEqually={handleDistributeInitialProbabilities}
+              />
+
+              {/* MATRIZ DE TRANSICIÓN */}
+              <SectionDivider label="Matriz de Transición" />
+
+              <ProbabilityMatrix
+                description="Defina las probabilidades de transición entre los estados ocultos. La suma de las probabilidades de cada fila debe ser igual a 1.00."
+                rowNames={stateNames}
+                columnNames={stateNames}
+                matrix={transitionMatrix}
+                onChange={setTransitionMatrix}
+              />
+
+              {/* MATRIZ DE EMISION */}
+              <SectionDivider label="Matriz de Emisión" />
+
+              <ProbabilityMatrix
+                description="Defina las probabilidades de emisión de cada símbolo de observación para cada estado. La suma de las probabilidades de cada fila debe ser igual a 1.00."
+                rowNames={stateNames}
+                columnNames={observationNames}
+                matrix={emissionMatrix}
+                onChange={setEmissionMatrix}
+              />
+
+              <SectionDivider label="Secuencia de observaciones" />
+              <ObservationSequence
+                observationNames={observationNames}
+                sequence={observationSequence}
+                onChange={setObservationSequence}
+              />
+            </Box>
+          </>
+        )}
+        {/* CALCULAR / VOLVER */}
         <Button
           variant="contained"
-          sx={{ my: 2, px: 10 }}
-          onClick={handleCalculate}
+          sx={{ mb: 2, px: 10, mt: 'auto' }}
+          onClick={showResults ? () => setShowResults(false) : handleCalculate}
         >
-          Calcular
+          {showResults ? 'Volver' : 'Calcular'}
         </Button>
-      </Box>{' '}
+      </Box>
     </Box>
   );
 }
