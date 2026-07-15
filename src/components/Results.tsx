@@ -8,10 +8,22 @@ import {
   Divider,
   Stack,
   Chip,
+  Avatar,
+  Fade,
+  Table,
+  TableContainer,
+  TableCell,
+  TableBody,
+  TableRow,
+  TableHead,
+  Button,
 } from '@mui/material';
-import { calculateForward } from '../algorithms/forward';
-import { calculateViterbi } from '../algorithms/viterbi';
+import { calculateForward } from '../hmm/forward';
+import { calculateViterbi } from '../hmm/viterbi';
 import SectionDivider from './SectionDivider';
+import { useState } from 'react';
+import VisibilityIcon from '@mui/icons-material/VisibilityRounded';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOffRounded';
 
 type ResultsProps = {
   forwardResult: ReturnType<typeof calculateForward> | null;
@@ -31,6 +43,40 @@ export default function Results({
   if (!forwardResult || !viterbiResult) {
     return null;
   }
+
+  function formatProbability(value: number) {
+    if (value === 0) return '0';
+
+    if (Math.abs(value) < 0.000001) {
+      const [mantissa, exponent] = value.toExponential(4).split('e');
+
+      const superscript: Record<string, string> = {
+        '-': '⁻',
+        '0': '⁰',
+        '1': '¹',
+        '2': '²',
+        '3': '³',
+        '4': '⁴',
+        '5': '⁵',
+        '6': '⁶',
+        '7': '⁷',
+        '8': '⁸',
+        '9': '⁹',
+      };
+
+      const exponentText = exponent
+        .split('')
+        .map((char) => superscript[char] ?? char)
+        .join('');
+
+      return `${mantissa} × 10${exponentText}`;
+    }
+
+    return value.toFixed(6);
+  }
+
+  const [showForwardTable, setShowForwardTable] = useState(false);
+  const [showViterbiTable, setShowViterbiTable] = useState(false);
 
   return (
     <Box
@@ -116,7 +162,7 @@ export default function Results({
             color: 'text.secondary',
           }}
         >
-          Secuencia Observada
+          Secuencia observada
         </Typography>
         <Stack
           direction="row"
@@ -128,6 +174,11 @@ export default function Results({
           {sequence.map((observation, index) => (
             <Chip
               key={`${observation}-${index}`}
+              avatar={
+                <Avatar sx={{ backgroundColor: 'primary.main' }}>
+                  {index + 1}
+                </Avatar>
+              }
               label={observation}
               sx={{
                 backgroundColor: 'secondary.main',
@@ -138,60 +189,211 @@ export default function Results({
       </Box>
 
       <SectionDivider label="Resultados" />
+      <Fade in timeout={300}>
+        <Grid container spacing={2} sx={{ my: 3 }}>
+          <Grid
+            size={{
+              xs: 12,
+              md: showForwardTable ? 12 : 6,
+            }}
+          >
+            <Card>
+              <CardHeader
+                title="Forward"
+                sx={{ backgroundColor: 'primary.main' }}
+              />
+              <CardContent>
+                <Typography>
+                  Probabilidad de observar la secuencia considerando todos los
+                  caminos posibles
+                </Typography>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="subtitle2">Probabilidad total</Typography>
+                <Typography variant="h5">
+                  {formatProbability(forwardResult.probability)}
+                </Typography>
 
-      <Grid container spacing={2} sx={{ mt: 3 }}>
-        <Grid
-          size={{
-            xs: 12,
-            md: 6,
-          }}
-        >
-          <Card>
-            <CardHeader
-              title="Forward"
-              sx={{ backgroundColor: 'primary.main' }}
-            />
-            <CardContent>
-              <Typography>
-                Probabilidad de observar la secuencia considerando todos los
-                caminos posibles
-              </Typography>
-              <Divider sx={{ my: 2 }} />
-              <Typography>
-                Probabilidad total: <strong>{forwardResult.probability}</strong>
-              </Typography>
-            </CardContent>
-          </Card>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={
+                    showForwardTable ? (
+                      <VisibilityOffIcon />
+                    ) : (
+                      <VisibilityIcon />
+                    )
+                  }
+                  onClick={() => setShowForwardTable((current) => !current)}
+                  sx={{ mt: 2 }}
+                >
+                  {showForwardTable ? 'Ocultar tabla' : 'Ver tabla'}
+                </Button>
+                {showForwardTable && (
+                  <TableContainer
+                    sx={{
+                      mt: 2,
+                      border: '1px solid',
+                      borderColor: 'grey.800',
+                      borderRadius: 2,
+                    }}
+                  >
+                    <Table
+                      size="small"
+                      sx={{
+                        color: 'white',
+                        '& .MuiTableCell-root': { borderColor: 'gray' },
+                      }}
+                    >
+                      <TableHead>
+                        <TableRow>
+                          <TableCell></TableCell>
+
+                          {stateNames.map((stateName, index) => (
+                            <TableCell
+                              key={`${stateName}-${index}`}
+                              align="center"
+                            >
+                              {stateName}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      </TableHead>
+
+                      <TableBody>
+                        {forwardResult.forwardMatrix.map((row, rowIndex) => (
+                          <TableRow key={rowIndex}>
+                            <TableCell>{sequence[rowIndex]}</TableCell>
+
+                            {row.map((probability, columnIndex) => (
+                              <TableCell key={columnIndex} align="center">
+                                {probability.toFixed(4)}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid
+            size={{
+              xs: 12,
+              md: showViterbiTable ? 12 : 6,
+            }}
+          >
+            <Card>
+              <CardHeader
+                title="Viterbi"
+                sx={{ backgroundColor: 'primary.main' }}
+              />
+              <CardContent>
+                <Typography>
+                  Camino de estados ocultos más probable para la secuencia
+                  ingresada
+                </Typography>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="subtitle2">
+                  Probabilidad del mejor camino
+                </Typography>
+                <Typography variant="h5">
+                  {formatProbability(viterbiResult.probability)}
+                </Typography>
+
+                <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5 }}>
+                  Secuencia mas probable
+                </Typography>
+                <Stack
+                  direction="row"
+                  sx={{
+                    gap: 1,
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                  }}
+                >
+                  {viterbiResult.stateSequenceNames.map((state, index) => (
+                    <Box
+                      key={`${state}-${index}`}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                      }}
+                    >
+                      <Chip label={state} />
+                    </Box>
+                  ))}
+                </Stack>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={
+                    showViterbiTable ? (
+                      <VisibilityOffIcon />
+                    ) : (
+                      <VisibilityIcon />
+                    )
+                  }
+                  onClick={() => setShowViterbiTable((current) => !current)}
+                  sx={{ mt: 3 }}
+                >
+                  {showViterbiTable ? 'Ocultar tabla' : 'Ver tabla'}
+                </Button>
+                {showViterbiTable && (
+                  <TableContainer
+                    sx={{
+                      mt: 2,
+                      border: '1px solid',
+                      borderColor: 'grey.800',
+                      borderRadius: 2,
+                    }}
+                  >
+                    <Table
+                      size="small"
+                      sx={{
+                        color: 'white',
+                        '& .MuiTableCell-root': { borderColor: 'gray' },
+                      }}
+                    >
+                      <TableHead>
+                        <TableRow>
+                          <TableCell></TableCell>
+
+                          {stateNames.map((stateName, index) => (
+                            <TableCell
+                              key={`${stateName}-${index}`}
+                              align="center"
+                            >
+                              {stateName}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      </TableHead>
+
+                      <TableBody>
+                        {viterbiResult.viterbiMatrix.map((row, rowIndex) => (
+                          <TableRow key={rowIndex}>
+                            <TableCell>{sequence[rowIndex]}</TableCell>
+
+                            {row.map((probability, columnIndex) => (
+                              <TableCell key={columnIndex} align="center">
+                                {probability.toFixed(4)}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
-        <Grid
-          size={{
-            xs: 12,
-            sm: 6,
-          }}
-        >
-          <Card>
-            <CardHeader
-              title="Viterbi"
-              sx={{ backgroundColor: 'primary.main' }}
-            />
-            <CardContent>
-              <Typography>
-                Camino de estados ocultos más probable para la secuencia
-                ingresada
-              </Typography>
-              <Divider sx={{ my: 2 }} />
-              <Typography>
-                Probabilidad del mejor camino:
-                <strong>{viterbiResult.probability}</strong>
-              </Typography>
-              <Typography sx={{ mt: 2 }}>
-                Secuencia mas probable:
-                <strong>{viterbiResult.stateSequenceNames.join(' → ')}</strong>
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      </Fade>
     </Box>
   );
 }

@@ -1,4 +1,12 @@
-import { Box, Button, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  IconButton,
+  Typography,
+  CircularProgress,
+  Backdrop,
+  Tooltip,
+} from '@mui/material';
 import { useState } from 'react';
 import ProbabilityMatrix from './components/ProbabilityMatrix';
 import backgroundPattern from './styles/background';
@@ -9,9 +17,20 @@ import InitialProbabilities from './components/InitialProbabilities';
 import ObservationSequence, {
   type ObservationSequenceItem,
 } from './components/ObservationSequence';
-import { calculateForward } from './algorithms/forward';
-import { calculateViterbi } from './algorithms/viterbi';
+import { calculateForward } from './hmm/forward';
+import { calculateViterbi } from './hmm/viterbi';
+import { validateHmmModel } from './hmm/validations';
 import Results from './components/Results';
+import RefreshIcon from '@mui/icons-material/RefreshRounded';
+import SunIcon from '@mui/icons-material/WbSunnyRounded';
+import CoinIcon from '@mui/icons-material/PaidRounded';
+import CasinoIcon from '@mui/icons-material/CasinoRounded';
+import {
+  type HmmExample,
+  diceExample,
+  weatherExample,
+  coinExample,
+} from './hmm/examples';
 
 export default function App() {
   const distributeEqually = (count: number) => {
@@ -153,7 +172,29 @@ export default function App() {
     (item) => observationNames[item.observationIndex]
   );
 
-  const handleCalculate = () => {
+  const validation = validateHmmModel({
+    stateNames,
+    observationNames,
+    initialProbabilities,
+    transitionMatrix,
+    emissionMatrix,
+    observationSequenceLength: observationSequence.length,
+  });
+
+  const isModelValid = validation.isValid;
+
+  const tooltipMessage =
+    validation.errors.length === 1
+      ? validation.errors[0]
+      : 'Revise los datos ingresados antes de calcular';
+
+  const handleCalculate = async () => {
+    if (!isModelValid) return;
+
+    setIsCalculating(true);
+    setShowResults(false);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
     const normalizedInitialProbabilities = initialProbabilities.map(
       (value) => value / 100
     );
@@ -177,7 +218,51 @@ export default function App() {
     console.log('viterbi:', calculatedViterbiResult);
     console.log('data:', data);
 
+    setIsCalculating(false);
     setShowResults(true);
+  };
+
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  const handleReset = () => {
+    setNumStates(2);
+    setStateNames(['Estado 1', 'Estado 2']);
+    setInitialProbabilities([50, 50]);
+
+    setNumObservations(2);
+    setObservationNames(['Observación 1', 'Observación 2']);
+
+    setTransitionMatrix(createEqualMatrix(2, 2));
+    setEmissionMatrix(createEqualMatrix(2, 2));
+
+    setObservationSequence([]);
+
+    setForwardResult(null);
+    setViterbiResult(null);
+    setShowResults(false);
+  };
+
+  const loadExample = (example: HmmExample) => {
+    setNumStates(example.numStates);
+    setStateNames(example.stateNames);
+    setInitialProbabilities(example.initialProbabilities);
+
+    setNumObservations(example.numObservations);
+    setObservationNames(example.observationNames);
+
+    setTransitionMatrix(example.transitionMatrix);
+    setEmissionMatrix(example.emissionMatrix);
+
+    setObservationSequence(
+      example.observationSequence.map((observationIndex) => ({
+        id: crypto.randomUUID(),
+        observationIndex,
+      }))
+    );
+
+    setForwardResult(null);
+    setViterbiResult(null);
+    setShowResults(false);
   };
 
   return (
@@ -221,7 +306,6 @@ export default function App() {
         <Typography
           variant="h3"
           sx={{
-            mt: 4,
             textAlign: 'center',
             fontSize: {
               xs: '1.8rem',
@@ -232,11 +316,11 @@ export default function App() {
         >
           Modelos Ocultos de Markov
         </Typography>
+
         <Typography
           variant="h5"
           sx={{
             color: 'gray',
-            textAlign: 'center',
             fontStyle: 'italic',
             fontSize: {
               xs: '1.2rem',
@@ -247,6 +331,58 @@ export default function App() {
         >
           Forward & Viterbi
         </Typography>
+
+        {!showResults && (
+          <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+            <Tooltip title="Reiniciar" arrow>
+              <IconButton
+                onClick={handleReset}
+                sx={{
+                  border: 1,
+                  borderColor: 'divider',
+                }}
+              >
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Ejemplo dados" arrow>
+              <IconButton
+                onClick={() => loadExample(diceExample)}
+                sx={{
+                  border: 1,
+                  borderColor: 'primary.main',
+                }}
+              >
+                <CasinoIcon />
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Ejemplo clima" arrow>
+              <IconButton
+                onClick={() => loadExample(weatherExample)}
+                sx={{
+                  border: 1,
+                  borderColor: 'primary.main',
+                }}
+              >
+                <SunIcon />
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Ejemplo moneda" arrow>
+              <IconButton
+                onClick={() => loadExample(coinExample)}
+                sx={{
+                  border: 1,
+                  borderColor: 'primary.main',
+                }}
+              >
+                <CoinIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
 
         {showResults ? (
           <Results
@@ -333,14 +469,45 @@ export default function App() {
             </Box>
           </>
         )}
+
         {/* CALCULAR / VOLVER */}
-        <Button
-          variant="contained"
-          sx={{ mb: 2, px: 10, mt: 'auto' }}
-          onClick={showResults ? () => setShowResults(false) : handleCalculate}
+        <Tooltip
+          disableHoverListener={showResults || isModelValid}
+          title={tooltipMessage}
         >
-          {showResults ? 'Volver' : 'Calcular'}
-        </Button>
+          <span>
+            <Button
+              variant="contained"
+              sx={{
+                mb: 2,
+                px: 10,
+                mt: 'auto',
+              }}
+              onClick={
+                showResults ? () => setShowResults(false) : handleCalculate
+              }
+              disabled={isCalculating || (!showResults && !isModelValid)}
+            >
+              {showResults
+                ? 'Volver'
+                : isCalculating
+                  ? 'Calculando...'
+                  : 'Calcular'}
+            </Button>
+          </span>
+        </Tooltip>
+
+        <Backdrop
+          open={isCalculating}
+          sx={{
+            color: '#fff',
+            zIndex: (theme) => theme.zIndex.modal + 1,
+            flexDirection: 'column',
+            gap: 2,
+          }}
+        >
+          <CircularProgress color="inherit" />
+        </Backdrop>
       </Box>
     </Box>
   );
