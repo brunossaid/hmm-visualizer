@@ -407,7 +407,6 @@ export default function App() {
                 },
               }}
             >
-              {/* ESTADOS */}
               <SectionDivider label="Estados" />
 
               <StateConfiguration
@@ -417,7 +416,6 @@ export default function App() {
                 onStateNameChange={handleStateNameChange}
               />
 
-              {/* OBSERVACIONES */}
               <SectionDivider label="Observaciones" />
 
               <ObservationConfiguration
@@ -427,7 +425,6 @@ export default function App() {
                 onObservationNameChange={handleObservationNameChange}
               />
 
-              {/* PROBABILIDADES INICIALES */}
               <SectionDivider label="Probabilidades Iniciales" />
 
               <InitialProbabilities
@@ -438,7 +435,6 @@ export default function App() {
                 onDistributeEqually={handleDistributeInitialProbabilities}
               />
 
-              {/* MATRIZ DE TRANSICIÓN */}
               <SectionDivider label="Matriz de Transición" />
 
               <ProbabilityMatrix
@@ -449,7 +445,6 @@ export default function App() {
                 onChange={setTransitionMatrix}
               />
 
-              {/* MATRIZ DE EMISION */}
               <SectionDivider label="Matriz de Emisión" />
 
               <ProbabilityMatrix
@@ -470,7 +465,6 @@ export default function App() {
           </>
         )}
 
-        {/* CALCULAR / VOLVER */}
         <Tooltip
           disableHoverListener={showResults || isModelValid}
           title={tooltipMessage}

@@ -215,7 +215,6 @@ export default function Results({
 
                 <Button
                   variant="outlined"
-                  size="small"
                   startIcon={
                     showForwardTable ? (
                       <VisibilityOffIcon />
@@ -224,7 +223,7 @@ export default function Results({
                     )
                   }
                   onClick={() => setShowForwardTable((current) => !current)}
-                  sx={{ mt: 2 }}
+                  sx={{ mt: 2, px: 3 }}
                 >
                   {showForwardTable ? 'Ocultar tabla' : 'Ver tabla'}
                 </Button>
@@ -329,7 +328,6 @@ export default function Results({
                 </Stack>
                 <Button
                   variant="outlined"
-                  size="small"
                   startIcon={
                     showViterbiTable ? (
                       <VisibilityOffIcon />
@@ -338,7 +336,7 @@ export default function Results({
                     )
                   }
                   onClick={() => setShowViterbiTable((current) => !current)}
-                  sx={{ mt: 3 }}
+                  sx={{ mt: 3, px: 3 }}
                 >
                   {showViterbiTable ? 'Ocultar tabla' : 'Ver tabla'}
                 </Button>
